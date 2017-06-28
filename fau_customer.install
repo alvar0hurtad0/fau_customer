@@ -1,0 +1,55 @@
+<?php
+
+/**
+ * @file
+ * Install, update and uninstall functions for the fau_customer module.
+ */
+
+/**
+ * Implements hook_field_schema().
+ */
+function fau_customer_schema() {
+  $schema['fau_customers'] = array(
+    'description' => 'Stores customers.',
+    'fields' => array(
+      'fau_customer_id' => array(
+        'type' => 'serial',
+        'not null' => TRUE,
+        'unsigned' => TRUE,
+        'description' => 'Primary Key: Customer ID.',
+      ),
+      'uid' => array(
+        'description' => 'The users uid that owns this entity.',
+        'type' => 'int',
+        'not null' => TRUE,
+        'default' => 0,
+      ),
+      'name' => array(
+        'type' => 'varchar',
+        'length' => 32,
+        'not null' => FALSE,
+        'default' => '',
+        'description' => 'The name of the customer.',
+      ),
+      'cif' => array(
+        'type' => 'varchar',
+        'length' => 32,
+        'not null' => FALSE,
+        'default' => '',
+        'description' => 'CIF of the customer.',
+      ),
+      'address' => array(
+        'type' => 'text',
+        'not null' => FALSE,
+        'size' => 'big',
+        'description' => 'Adress of the customer.',
+      ),
+    ),
+    'primary key' => array('fau_customer_id'),
+    'indexes' => array(
+      'uid' => array('uid'),
+    ),
+  );
+
+  return $schema;
+}

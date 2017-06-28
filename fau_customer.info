@@ -1,0 +1,6 @@
+name = FAU customer
+description = "Customers funtionality"
+package = FAU
+core = 7.x
+core = "7.x"
+project = "FAU"

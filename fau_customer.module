@@ -1,0 +1,181 @@
+<?php
+
+/**
+ * @file
+ * Main file for the fau_customer module.
+ */
+
+/**
+ * Implements hook_entity_info().
+ */
+function fau_customer_entity_info() {
+  return array(
+    'fau_customers' => array(
+      'label' => t('Customer'),
+      'base table' => 'fau_customers',
+      'entity keys' => array(
+        'id' => 'fau_customer_id',
+      ),
+    ),
+  );
+}
+
+/**
+ * Implements hook_form_FORM_ID_alter().
+ *
+ * Add a checkbox in order to store the customer.
+ */
+function fau_customer_form_node_form_alter(&$form, &$form_state, $form_id) {
+
+  // Check we're on the invoice form.
+  if ($form_id != 'invoice_node_form') {
+    return;
+  }
+  // Convert fields to autocomplete.
+  $form['field_invoice_client_nif_cif']['und'][0]['value']['#autocomplete_path'] = 'autocomplete/customer/name';
+
+  // Attach JS to form.
+  $form['#attached']['js'] = [
+    'data' => drupal_get_path('module', 'fau_customer') . '/js/fau_customer.js',
+    'type' => 'file',
+  ];
+
+}
+
+/**
+ * Implements hook_menu().
+ */
+function fau_customer_menu() {
+
+  // Autocomplete callback for customer CIF.
+  $items['autocomplete/customer/name'] = [
+    'title' => 'Autocomplete for customers',
+    'page callback' => '_customer_autocomplete_name',
+    'access arguments' => array('access content'),
+    'type' => MENU_CALLBACK,
+  ];
+
+  // Ajax callback to get data by CIF.
+  $items['js/customer/cif/%'] = [
+    'title' => 'Search customer by CIF',
+    'page callback' => '_fau_customer_get_data_by_cif',
+    'access arguments' => array('access content'),
+    'page arguments' => [3],
+    'type' => MENU_CALLBACK,
+  ];
+
+  return $items;
+}
+
+/**
+ * Autocomplete helper.
+ *
+ * @param string $string
+ *   String to search.
+ */
+function _customer_autocomplete_name($string) {
+  global $user;
+  $result = db_select('fau_customers', 'fauc')
+    ->fields('fauc', ['name', 'cif'])
+    ->condition(
+      db_or()
+        ->condition('name', '%' . db_like($string) . '%', 'LIKE')
+        ->condition('cif', '%' . db_like($string) . '%', 'LIKE')
+      )
+    ->condition('uid', $user->uid)
+    ->execute()
+    ->fetchAll();
+
+  // If there's no results that's all.
+  if (!$result) {
+    print drupal_json_output([]);
+    exit();
+  }
+  // Save the query to matches.
+  foreach ($result as $row) {
+    $matches[$row->cif] = check_plain($row->name) . ' - ' . $row->cif;
+  }
+
+  // Return for JS.
+  print drupal_json_output($matches);
+  exit();
+}
+
+/**
+ * Search customer data by CIF.
+ *
+ * @param string $string
+ *   String to search.
+ */
+function _fau_customer_get_data_by_cif($string) {
+  // If there's no cif to search there's nothing to do.
+  if (!$string || $string == 'undefined') {
+    print drupal_json_output([]);
+    exit();
+  }
+  global $user;
+  $result = db_select('fau_customers', 'fauc')
+    ->fields('fauc', ['name', 'cif', 'address'])
+    ->condition('cif', $string)
+    ->condition('uid', $user->uid)
+    ->execute()
+    ->fetch();
+
+  // If there's no results that's all.
+  if (!$result) {
+    print drupal_json_output([]);
+    exit();
+  }
+
+  // Return for JS.
+  print drupal_json_output($result);
+  exit();
+}
+
+/**
+ * Implements hook_node_insert().
+ *
+ * Insert new customers or updated existing.
+ */
+function fau_customer_node_insert($node) {
+  // Check for the right content type.
+  if ($node->type != 'invoice') {
+    return;
+  }
+
+  global $user;
+
+  $wrapper = entity_metadata_wrapper('node', $node);
+
+  $result = db_select('fau_customers', 'fauc')
+    ->fields('fauc', ['name', 'cif', 'address'])
+    ->condition('cif', $wrapper->field_invoice_client_nif_cif->value())
+    ->condition('uid', $user->uid)
+    ->execute()
+    ->fetch();
+
+  // If it's a new customer we can insert on database and that's all.
+  if (!$result) {
+    db_insert('fau_customers')
+      ->fields([
+        'name' => $wrapper->field_invoice_client_name->value(),
+        'cif' => $wrapper->field_invoice_client_nif_cif->value(),
+        'address' => $wrapper->field_invoice_client_address->value(),
+        'uid' => $user->uid,
+      ])
+      ->execute();
+
+    return;
+  }
+
+  // If there's an existing customer, we update the name and address.
+  db_update('fau_customers')
+    ->fields([
+      'name' => $wrapper->field_invoice_client_name->value(),
+      'address' => $wrapper->field_invoice_client_address->value(),
+    ])
+    ->condition('cif', $wrapper->field_invoice_client_nif_cif->value())
+    ->condition('uid', $user->uid)
+    ->execute();
+
+}
